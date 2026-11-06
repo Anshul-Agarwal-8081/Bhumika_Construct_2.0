@@ -3,9 +3,62 @@ import assert from 'node:assert/strict'
 import { createSupabaseAdminClient, createSupabaseClient } from '../src/config/supabase.js'
 import { env } from '../src/config/env.js'
 import { requireAuth } from '../src/middleware/auth.js'
+import { authRouter, refreshTokenSchema } from '../src/routes/auth.js'
 
 const fakeUser = (email: string) => ({ id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email, app_metadata: { provider: 'email', providers: ['email'] }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', email_confirmed_at: '2026-01-01T00:00:00Z' })
 const fakeSession = (email: string) => ({ access_token: 'test-access-token', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'test-refresh-token', user: fakeUser(email) })
+
+function authHandler(path: string, method: string) {
+  const layer = (authRouter as any).stack.find((entry: any) => entry.route?.path === path && entry.route?.methods?.[method])
+  assert.ok(layer, `missing ${method.toUpperCase()} ${path} route`)
+  return layer.route.stack.at(-1).handle as (req: any, res: any, next: (error?: unknown) => void) => Promise<void>
+}
+
+async function invokeAuth(path: string, method: string, req: Record<string, any>) {
+  const response: any = { statusCode: 200, body: undefined, status(code: number) { this.statusCode = code; return this }, json(body: unknown) { this.body = body; return this } }
+  let nextError: unknown
+  await authHandler(path, method)({ ...req }, response, (error) => { nextError = error })
+  if (nextError) throw nextError
+  return response
+}
+
+test('refresh token validation accepts Supabase legacy tokens and rejects malformed short values', () => {
+  assert.equal(refreshTokenSchema.safeParse('abcdefghijkl').success, true)
+  assert.equal(refreshTokenSchema.safeParse('abcde-ghi kl').success, false)
+  assert.equal(refreshTokenSchema.safeParse('short').success, false)
+})
+
+test('password recovery sends a reset request and updates only the verified user', async (t) => {
+  const userId = '11111111-1111-4111-8111-111111111111'
+  const requests: { path: string; method: string; body: any }[] = []
+  t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const request = input instanceof Request ? input : undefined
+    const url = new URL(request?.url ?? String(input))
+    const method = init?.method ?? request?.method ?? 'GET'
+    const bodyText = init?.body ?? (request ? await request.clone().text() : '')
+    const body = typeof bodyText === 'string' && bodyText ? JSON.parse(bodyText) : {}
+    requests.push({ path: url.pathname, method, body })
+    if (url.pathname.endsWith('/auth/v1/recover') && method === 'POST') return Response.json({}, { status: 200 })
+    if (url.pathname.endsWith(`/auth/v1/admin/users/${userId}`) && method === 'PUT') return Response.json(fakeUser('learner@example.test'), { status: 200 })
+    throw new Error(`Unexpected mocked Auth API request: ${method} ${url.pathname}`)
+  })
+
+  const recovery = await invokeAuth('/forgot-password', 'post', { body: { email: 'learner@example.test' } })
+  assert.equal(recovery.statusCode, 200)
+  assert.match(recovery.body.message, /If the account exists/)
+  assert.equal(requests[0].body.email, 'learner@example.test')
+
+  const invalid = await invokeAuth('/update-password', 'post', { body: { password: 'short', extra: true }, user: { id: userId } })
+  assert.equal(invalid.statusCode, 400)
+  assert.equal(requests.length, 1)
+
+  const updated = await invokeAuth('/update-password', 'post', { body: { password: 'a-secure-test-password' }, user: { id: userId }, accessToken: 'verified-recovery-access-token' })
+  assert.equal(updated.statusCode, 200)
+  assert.deepEqual(updated.body, { user: { id: userId } })
+  assert.equal(requests[1].method, 'PUT')
+  assert.equal(requests[1].path, `/auth/v1/admin/users/${userId}`)
+  assert.equal(requests[1].body.password, 'a-secure-test-password')
+})
 
 test('mocked Supabase auth covers registration, login errors, session restoration and logout', async (t) => {
   const requests: { path: string; method: string }[] = []
@@ -21,6 +74,7 @@ test('mocked Supabase auth covers registration, login errors, session restoratio
       if (body.email === 'confirm@example.test') return Response.json({ user, session: null }, { status: 200 })
       return Response.json({ ...fakeSession(user.email), user }, { status: 200 })
     }
+    if (url.pathname.endsWith('/auth/v1/recover') && method === 'POST') return Response.json({}, { status: 200 })
     if (url.pathname.endsWith('/auth/v1/token') && method === 'POST' && url.searchParams.get('grant_type') === 'refresh_token') {
       if (body.refresh_token === 'invalid-refresh-token') return Response.json({ code: 'invalid_grant', msg: 'Refresh token not found' }, { status: 400 })
       return Response.json(fakeSession('learner@example.test'), { status: 200 })
@@ -48,6 +102,9 @@ test('mocked Supabase auth covers registration, login errors, session restoratio
   assert.equal(emailConfirmation.data.session, null)
   assert.ok(emailConfirmation.data.user)
 
+  const passwordRecovery = await client.auth.resetPasswordForEmail('learner@example.test')
+  assert.equal(passwordRecovery.error, null)
+
   const rejected = await client.auth.signInWithPassword({ email: 'learner@example.test', password: 'incorrect-password' })
   assert.ok(rejected.error)
   assert.equal(rejected.data.session, null)
@@ -70,6 +127,7 @@ test('mocked Supabase auth covers registration, login errors, session restoratio
   const logout = await createSupabaseAdminClient().auth.admin.signOut(token, 'local')
   assert.equal(logout.error, null)
   assert.ok(requests.some((request) => request.path.endsWith('/auth/v1/signup')))
+  assert.ok(requests.some((request) => request.path.endsWith('/auth/v1/recover')))
   assert.ok(requests.some((request) => request.path.endsWith('/auth/v1/token')))
   assert.ok(requests.some((request) => request.path.endsWith('/auth/v1/user')))
   assert.ok(requests.some((request) => request.path.endsWith('/auth/v1/logout')))

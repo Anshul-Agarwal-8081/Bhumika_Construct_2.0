@@ -25,13 +25,10 @@ export function evaluateAnswer(challenge: Challenge, answer: string): Evaluation
     'sql-aggregation': ['join', 'distinct', 'count', 'grain', 'group', 'aggregate', 'items'],
     'sql-join-review': ['left join', 'left', 'null', 'coalesce', 'zero', 'filter', 'where'],
     'metric-drop': ['conversion', 'caus', 'segment', 'experiment', 'check', 'baseline', 'hypothesis'],
-<<<<<<< HEAD
     'array-pair': ['array', 'hash', 'map', 'lookup', 'time', 'space', 'duplicate', 'empty', 'no pair'],
     'api-design': ['endpoint', 'validation', 'authentication', 'status', 'error', 'conflict', 'version'],
     'oop-library': ['class', 'member', 'book', 'copy', 'responsibility', 'composition', 'inheritance', 'borrow'],
     'behavioral-setback': ['situation', 'action', 'result', 'learn', 'contribution', 'specific'],
-=======
->>>>>>> 558bb8dc47ee8517cabf3ba2e6d9a10a49423a3c
   }
   const detected = termsByChallenge[challenge.id] ?? []
   const hits = detected.filter((term) => lower.includes(term))

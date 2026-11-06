@@ -74,6 +74,20 @@ export async function learningRegister(email: string, password: string) {
   return { signedIn: Boolean(body?.session?.access_token), confirmationRequired: Boolean(body?.confirmationRequired) }
 }
 
+export async function learningForgotPassword(email: string) {
+  const response = await fetch(`${base}/auth/forgot-password`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(body?.error?.message || 'Could not request password recovery.')
+  return body as { message: string }
+}
+
+export async function learningUpdatePassword(accessToken: string, password: string) {
+  const response = await fetch(`${base}/auth/update-password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ password }) })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(body?.error?.message || 'Could not update your password.')
+  return body as { user: { id: string } }
+}
+
 export async function learningSignOut() {
   try { await learningRequest('/auth/logout', { method: 'POST' }) } finally { learningClearSession() }
 }

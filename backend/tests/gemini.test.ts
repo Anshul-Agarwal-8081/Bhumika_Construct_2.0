@@ -47,19 +47,31 @@ test('429 follows the retry policy', async (t) => {
   assert.equal(models.length, 2)
 })
 
+test('explicit Gemini quota exhaustion does not retry or call the fallback model', async (t) => {
+  const models = mockFetch(t, [new Response(JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for this project.' } }), { status: 429 })])
+  await assert.rejects(generateWithGemini('Reply OK'), (error: Error & { statusCode?: number }) => error.message === 'Gemini quota is temporarily unavailable.' && error.statusCode === 503)
+  assert.deepEqual(models, [env.GEMINI_MODEL])
+})
+
 test('both models fail and return a sanitized error', async (t) => {
   const models = mockFetch(t, [fail(503), fail(503), fail(503), fail(503), fail(503), fail(503)])
   await assert.rejects(generateWithGemini('Reply OK'), /temporarily unavailable/)
   assert.equal(models.length, 6)
 })
 
-for (const [name, status] of [['invalid key', 400], ['unsupported model', 404]] as const) {
-  test(`${name} does not retry or fall back`, async (t) => {
-    const models = mockFetch(t, [fail(status, env.GEMINI_API_KEY ?? 'secret')])
-    await assert.rejects(generateWithGemini('Reply OK'), (error: Error) => !error.message.includes(env.GEMINI_API_KEY ?? 'secret'))
-    assert.equal(models.length, 1)
-  })
-}
+test('invalid key does not retry or fall back', async (t) => {
+  const models = mockFetch(t, [fail(400, env.GEMINI_API_KEY ?? 'secret')])
+  await assert.rejects(generateWithGemini('Reply OK'), (error: Error) => !error.message.includes(env.GEMINI_API_KEY ?? 'secret'))
+  assert.equal(models.length, 1)
+})
+
+test('unsupported primary model makes one fallback request', async (t) => {
+  const models = mockFetch(t, [fail(404, 'model not found'), ok('Fallback model response')])
+  const result = await generateWithGemini('Reply OK')
+  assert.equal(result.model, env.GEMINI_FALLBACK_MODEL)
+  assert.equal(result.text, 'Fallback model response')
+  assert.deepEqual(models, [env.GEMINI_MODEL, env.GEMINI_FALLBACK_MODEL])
+})
 
 test('empty primary response falls back to a valid fallback response', async (t) => {
   const models = mockFetch(t, [new Response(JSON.stringify({ candidates: [] }), { status: 200 }), ok('Recovered')])

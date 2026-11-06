@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -13,10 +12,3 @@ export default defineConfig(({ mode }) => {
     define: { 'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBase) },
   }
 })
-=======
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-
-export default defineConfig({ plugins: [react(), tailwindcss()] })
->>>>>>> 558bb8dc47ee8517cabf3ba2e6d9a10a49423a3c

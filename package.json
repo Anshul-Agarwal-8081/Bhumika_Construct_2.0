@@ -1,3 +1,4 @@
+
 {
   "name": "bhumika-career-readiness",
   "private": true,
@@ -6,8 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-<<<<<<< HEAD
     "preview": "vite preview",
+    "start": "node --import tsx backend/src/server.ts",
     "server": "node --import tsx backend/src/server.ts",
     "server:dev": "node --import tsx backend/src/server.ts",
     "server:build": "tsc -p backend/tsconfig.json",
@@ -36,20 +37,6 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "tsx": "^4.23.15",
-=======
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "lucide-react": "^0.577.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
->>>>>>> 558bb8dc47ee8517cabf3ba2e6d9a10a49423a3c
     "typescript": "^5.9.3",
     "vite": "^8.3.5"
   }

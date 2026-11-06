@@ -142,19 +142,19 @@ async function enrichYouTubeVideos(resources: LearningResource[]): Promise<Learn
     for (const [key, value] of Object.entries({ part: 'contentDetails,snippet', id: videoIds.join(','), key: env.YOUTUBE_API_KEY })) detailsUrl.searchParams.set(key, value)
     const details = await provider<{ items?: { id?: string; contentDetails?: { duration?: string }; snippet?: { channelTitle?: string; defaultLanguage?: string; defaultAudioLanguage?: string; thumbnails?: { medium?: { url?: string } } } }[] }>(detailsUrl.toString(), {})
     const byId = new Map((details.items ?? []).map((item) => [item.id, item]))
-    return resources.map((resource) => {
-      if (resource.type !== 'Video') return resource
+    return resources.flatMap((resource) => {
+      if (resource.type !== 'Video') return [resource]
       const videoId = new URL(resource.url).searchParams.get('v') ?? ''
       const detail = byId.get(videoId)
-      if (!detail) return resource
+      if (!detail) return []
       const sourceNames = [...new Set([resource.source, detail.snippet?.channelTitle].filter((value): value is string => Boolean(value?.trim())).flatMap((value) => value.split(',').map((part) => part.trim())))]
-      return {
+      return [{
         ...resource,
         source: sourceNames.join(', '),
         estimatedTime: isoDurationLabel(detail.contentDetails?.duration) ?? resource.estimatedTime,
         language: detail.snippet?.defaultAudioLanguage ?? detail.snippet?.defaultLanguage ?? resource.language,
         thumbnail: detail.snippet?.thumbnails?.medium?.url ?? resource.thumbnail,
-      }
+      }]
     })
   } catch { return resources }
 }

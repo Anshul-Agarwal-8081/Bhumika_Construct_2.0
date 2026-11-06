@@ -1,10 +1,10 @@
 import { env } from './env.js'
 
-type GeminiResponse = { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+type GeminiResponse = { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { status?: string; message?: string } }
 const temporary = (status: number) => status === 429 || [500, 502, 503, 504].includes(status)
 
 class ProviderFailure extends Error {
-  constructor(readonly status: number, message: string) { super(message) }
+  constructor(readonly status: number, message: string, readonly retryable = true) { super(message) }
 }
 
 class InvalidModelOutput extends Error {}
@@ -22,8 +22,9 @@ async function generate<T>(model: string, prompt: string, validate?: (text: stri
       })
       const body = await response.json().catch(() => ({})) as GeminiResponse
       if (!response.ok) {
-        const failure = new ProviderFailure(response.status, `Gemini request failed (${response.status}).`)
-        if (!temporary(response.status) || attempt === maxAttempts - 1) throw failure
+        const quotaExhausted = response.status === 429 && (/quota_exceeded|resource_exhausted/i.test(body.error?.status ?? '') || /quota.{0,30}(exceed|limit)|(?:exceed|limit).{0,30}quota/i.test(body.error?.message ?? ''))
+        const failure = new ProviderFailure(response.status, `Gemini request failed (${response.status}).`, !quotaExhausted)
+        if (!temporary(response.status) || !failure.retryable || attempt === maxAttempts - 1) throw failure
       } else {
         const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim()
         if (!text) throw new InvalidModelOutput('Gemini returned an empty response.')
@@ -53,9 +54,10 @@ export async function generateWithGemini<T>(prompt: string, validate?: (text: st
   }
   try { return await invoke(env.GEMINI_MODEL) }
   catch (primary) {
-    const mayFallback = primary instanceof InvalidModelOutput || (!(primary instanceof ProviderFailure) || temporary(primary.status))
+    const mayFallback = primary instanceof InvalidModelOutput || (!(primary instanceof ProviderFailure) || primary.status === 404 || (primary.retryable && temporary(primary.status)))
     if (!mayFallback || !env.GEMINI_FALLBACK_MODEL || env.GEMINI_FALLBACK_MODEL === env.GEMINI_MODEL) {
       if (primary instanceof InvalidModelOutput) throw Object.assign(new Error('Gemini could not return a valid structured response.'), { statusCode: 502 })
+      if (primary instanceof ProviderFailure && primary.status === 429 && !primary.retryable) throw Object.assign(new Error('Gemini quota is temporarily unavailable.'), { statusCode: 503 })
       throw primary
     }
     try { return await invoke(env.GEMINI_FALLBACK_MODEL) }

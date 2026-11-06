@@ -74,15 +74,13 @@ test('learning search normalizes and deduplicates URLs, preserves provider metad
 
   const result = await searchLearning('React test normalize')
   const videos = result.resources.filter((resource) => resource.type === 'Video')
-  assert.equal(result.resources.length, 3)
-  assert.equal(videos.length, 2)
+  assert.equal(result.resources.length, 2)
+  assert.equal(videos.length, 1)
   assert.equal(videos[0].url, `https://www.youtube.com/watch?v=${videoId}`)
   assert.match(videos[0].source, /YouTube.*Learning Channel|Learning Channel.*YouTube/)
   assert.equal(videos[0].estimatedTime, '17 minutes')
   assert.equal(videos[0].language, 'en')
   assert.equal(videos[0].thumbnail, 'https://img.example/video.jpg')
-  assert.equal(videos.find((resource) => resource.id !== videos[0].id)?.source, 'YouTube')
-  assert.equal(videos.find((resource) => resource.id !== videos[0].id)?.estimatedTime, null)
   assert.ok(result.resources.every((resource) => resource.url.startsWith('https://')))
 })
 
@@ -93,14 +91,14 @@ test('search survives one provider failing when the other returns real resources
     const url = new URL(String(input))
     if (url.hostname === 'api.tavily.com') { tavilyAttempts++; return new Response('{}', { status: 503 }) }
     if (url.hostname === 'www.googleapis.com' && url.pathname.endsWith('/search')) return new Response(JSON.stringify({ items: [{ id: { videoId }, snippet: { title: 'React lesson' } }] }), { status: 200 })
-    if (url.hostname === 'www.googleapis.com' && url.pathname.endsWith('/videos')) return new Response(JSON.stringify({ items: [] }), { status: 200 })
+    if (url.hostname === 'www.googleapis.com' && url.pathname.endsWith('/videos')) return new Response(JSON.stringify({ items: [{ id: videoId, contentDetails: { duration: 'PT5M' }, snippet: { channelTitle: 'React Channel' } }] }), { status: 200 })
     if (url.hostname === 'generativelanguage.googleapis.com') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '[]' }] } }] }), { status: 200 })
     throw new Error(`Unexpected provider URL: ${url.hostname}${url.pathname}`)
   })
   const result = await searchLearning('React partial provider failure')
   assert.equal(tavilyAttempts, 2)
   assert.equal(result.resources.length, 1)
-  assert.equal(result.resources[0].source, 'YouTube')
+  assert.equal(result.resources[0].source, 'YouTube, React Channel')
 })
 
 test('search ranks topic matches ahead of high-scoring unrelated provider results', async (t) => {
