@@ -4,7 +4,7 @@ import {
   BookOpen, BriefcaseBusiness, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp,
   Clock3, Code2, Copy, Download, ExternalLink, FileText, Flame, GraduationCap, House,
   Layers3, ListChecks, LoaderCircle, LockKeyhole, Menu, MessageSquareText, MoreHorizontal,
-  PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, Send, Sparkles, Target, Trophy, UserRound, Users, X, Zap,
+  PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, Send, Sparkles, Target, Trophy, Upload, UserRound, Users, X, Zap,
 } from 'lucide-react'
 import { challenges, modules, opportunities, resources, roles, skills } from './data'
 import { arenaCategories, arenaTopics, arenaXpReward } from './arenaData'
@@ -12,6 +12,7 @@ import { evaluateAnswer } from './services/evaluate'
 import { loadState, resetState, saveState } from './services/storage'
 import { learningRequest, learningSignIn, learningSignOut, learningRegister, learningCurrentUser, learningClearSession, learningForgotPassword, learningUpdatePassword, type LearningResource, type Roadmap } from './services/learningApi'
 import { filterLearningResources } from './services/learningFilters'
+import { readResumePdf } from './services/resumePdf'
 import type { Application, ApplicationStatus, Attempt, Challenge, DemoState, Evaluation, Opportunity, Resource, Role, RoadmapModule } from './types'
 
 type View = 'dashboard' | 'explore' | 'role' | 'learn' | 'lesson' | 'practice' | 'results' | 'arena' | 'opportunities' | 'opportunity' | 'resume' | 'applications'
@@ -483,8 +484,48 @@ function ResumeStudio({ state, opportunity, onProfileChange, onSaveApplication }
   const [formError, setFormError] = useState('')
   const [generated, setGenerated] = useState(false)
   const [copied, setCopied] = useState('')
+  const [pdfStatus, setPdfStatus] = useState('')
+  const [readingPdf, setReadingPdf] = useState(false)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
   const profile = state.profile
   const setField = (field: keyof typeof profile, value: string) => onProfileChange({ ...profile, [field]: value })
+
+  async function importResumePdf(file?: File) {
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfStatus('Choose a PDF file to import.')
+      return
+    }
+    setReadingPdf(true)
+    setPdfStatus('Reading your PDF on this device…')
+    try {
+      const imported = await readResumePdf(file)
+      const detected = Object.entries(imported).filter(([, value]) => Boolean(value)) as [keyof typeof profile, string][]
+      if (!detected.length) {
+        setPdfStatus('No profile details were recognized. You can still enter them manually.')
+        return
+      }
+      const nextProfile = { ...profile }
+      let updatedCount = 0
+      for (const [field, value] of detected) {
+        const existing = profile[field].trim()
+        if (!existing) {
+          nextProfile[field] = value
+          updatedCount += 1
+        } else if (field !== 'name' && field !== 'email' && !existing.toLowerCase().includes(value.toLowerCase())) {
+          nextProfile[field] = `${existing}${field === 'education' ? ' · ' : '\n'}${value}`
+          updatedCount += 1
+        }
+      }
+      onProfileChange(nextProfile)
+      setPdfStatus(updatedCount ? `Filled ${updatedCount} field${updatedCount === 1 ? '' : 's'}. Review the details below.` : 'Those details are already in your profile, so nothing needed changing.')
+    } catch (error) {
+      setPdfStatus(error instanceof Error ? error.message : 'Could not read this PDF. Try another file.')
+    } finally {
+      setReadingPdf(false)
+      if (pdfInputRef.current) pdfInputRef.current.value = ''
+    }
+  }
 
   function generate(event: React.FormEvent) {
     event.preventDefault()
@@ -514,8 +555,33 @@ function ResumeStudio({ state, opportunity, onProfileChange, onSaveApplication }
     if (profile.links) sections.push('LINKS\n' + profile.links)
     const questions = requirementsWithoutEvidence.map((item) => '• What evidence can you share for: ' + item + '?').join('\n') || (requirementsForCheck.length ? 'No obvious gaps found by the simple keyword check. Review this carefully before using it.' : 'No explicit requirement bullets were detected. Review the listing manually before using this draft.')
     setResumeDraft(sections.join('\n\n') + '\n\nQUESTIONS BEFORE YOU APPLY\n' + questions)
-    const evidenceMention = suppliedSkills.length ? 'My profile lists ' + suppliedSkills.join(', ') + '.' : profile.projects ? 'My profile includes the project details I supplied.' : 'I have included the profile information I supplied for your review.'
-    setMessageDraft('Subject: Application for ' + opportunity.title + '\n\nHello ' + opportunity.company + ' team,\n\nI’m preparing an application for the ' + opportunity.title + ' opportunity. ' + evidenceMention + (profile.education ? ' I also provided ' + profile.education + ' as my education.' : '') + ' I would welcome the opportunity to discuss the information in my application.\n\nThank you for your time,\n' + (profile.name || '[Your name]') + (profile.email ? '\n' + profile.email : ''))
+    const roleText = `${opportunity.title} ${jobDescription}`.toLowerCase()
+    const stopWords = new Set(['about', 'after', 'also', 'and', 'are', 'for', 'from', 'have', 'into', 'with', 'your', 'will', 'the', 'this', 'that', 'their', 'they', 'you', 'our', 'who', 'what', 'when', 'where', 'work', 'role', 'team', 'experience', 'skills', 'ability', 'strong', 'good', 'using', 'use', 'across', 'including', 'such', 'looking', 'candidate', 'years'])
+    const roleWords = new Set(roleText.match(/[a-z][a-z0-9+#.-]{2,}/g)?.filter((word) => !stopWords.has(word)) ?? [])
+    const relevantFacts = (value: string) => value
+      .split(/\n+|(?<=[.!?])\s+/)
+      .map((fact) => fact.replace(/^\s*[•*-]\s*/, '').trim())
+      .filter(Boolean)
+      .map((fact) => {
+        const words = fact.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) ?? []
+        return { fact, score: words.filter((word) => roleWords.has(word) && !stopWords.has(word)).length }
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .map(({ fact }) => fact.length > 170 ? `${fact.slice(0, 167).trimEnd()}…` : fact)
+    const relevantExperience = relevantFacts(profile.experience)
+    const relevantProjects = relevantFacts(profile.projects)
+    const relevantSkills = matchedSkills.slice(0, 4)
+    const evidenceLines = [
+      ...relevantExperience.map((fact) => `My relevant experience includes ${fact}.`),
+      ...relevantProjects.map((fact) => `A project related to this role: ${fact}.`),
+      relevantSkills.length ? `Relevant skills I bring include ${relevantSkills.join(', ')}.` : '',
+    ].filter(Boolean)
+    const emailBody = evidenceLines.length
+      ? `I’m applying for the ${opportunity.title} role. ${evidenceLines.join(' ')}`
+      : `I’m applying for the ${opportunity.title} role. I’d welcome the opportunity to discuss how my background could fit your needs.`
+    setMessageDraft(`Subject: Application for ${opportunity.title}\n\nHello ${opportunity.company} team,\n\n${emailBody}\n\nThank you for your consideration,\n${profile.name || '[Your name]'}${profile.email ? `\n${profile.email}` : ''}`)
     setMissing(requirementsWithoutEvidence.length ? requirementsWithoutEvidence : requirementsForCheck.length ? [] : ['No explicit requirement bullets were detected. Review the listing manually.']); setGenerated(true)
   }
   async function copy(text: string, key: string) { try { await navigator.clipboard.writeText(text); setCopied(key) } catch { setCopied('') } }
@@ -532,6 +598,7 @@ function ResumeStudio({ state, opportunity, onProfileChange, onSaveApplication }
     <PageHeading eyebrow="PREPARE WITH YOUR FACTS" title="Resume Studio" description="Create a reviewable draft for one opportunity. Nothing is sent or submitted here." action={<Pill tone="teal"><LockKeyhole size={12} /> YOUR FACTS ONLY</Pill>} />
     <div className="resume-progress"><span className="resume-step active"><i>1</i> Profile facts</span><span className="resume-step-line" /><span className={`resume-step ${generated ? 'active' : ''}`}><i>2</i> Tailored draft</span><span className="resume-step-line" /><span className="resume-step"><i>3</i> Review & save</span></div>
     <div className="resume-layout"><form className="resume-form card" onSubmit={generate}><div className="resume-form-head"><div><div className="eyebrow">YOUR INFORMATION</div><h2>Tell us what you've done.</h2><p>Only the facts you enter below can appear in your draft.</p></div><span className="resume-form-icon"><UserRound size={18} /></span></div>
+      <div className="resume-import"><input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => void importResumePdf(event.target.files?.[0])} /><Button type="button" variant="secondary" disabled={readingPdf} onClick={() => pdfInputRef.current?.click()}>{readingPdf ? <LoaderCircle size={15} className="spin" /> : <Upload size={15} />} {readingPdf ? 'Reading PDF…' : 'Import resume PDF'}</Button><span>Your file stays on this device. Check imported details before using them.</span>{pdfStatus && <div className="resume-import-status" role="status">{pdfStatus}</div>}</div>
       <label className="field-label">Name <span>Optional</span><input value={profile.name} onChange={(event) => setField('name', event.target.value)} placeholder="Your name" /></label>
       <div className="form-two-col"><label className="field-label">Email <span>Optional</span><input type="email" value={profile.email} onChange={(event) => setField('email', event.target.value)} placeholder="you@example.com" /></label><label className="field-label">Education <span>Optional</span><input value={profile.education} onChange={(event) => setField('education', event.target.value)} placeholder="Degree, institution, or current year" /></label></div>
       <label className="field-label">Skills <span>List only what you can discuss</span><textarea rows={2} value={profile.skills} onChange={(event) => setField('skills', event.target.value)} placeholder="e.g. JavaScript, React, SQL" /></label>
