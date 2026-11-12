@@ -13,5 +13,6 @@ healthRouter.get('/', (_req, res) => res.json({
     learningSearch: env.TAVILY_API_KEY || env.YOUTUBE_API_KEY ? 'configured' : 'not_configured',
     youtube: env.YOUTUBE_API_KEY ? 'configured' : 'not_configured',
     jobs: env.ADZUNA_APP_ID && env.ADZUNA_APP_KEY ? 'configured' : 'not_configured',
+    founderFinder: env.RECENT_FUNDING_API_KEY && env.RECENT_FUNDING_ON_BEHALF_OF ? 'configured' : 'not_configured',
   },
 }))
