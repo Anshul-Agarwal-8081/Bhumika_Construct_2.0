@@ -43,9 +43,19 @@ export interface Application {
   id: string; opportunityId: string; title: string; company: string
   status: ApplicationStatus; updatedAt: string; resumeDraft?: string; messageDraft?: string
 }
+export interface FundedFounder {
+  founderId: string; founderName: string; role: string; companySlug: string; companyName: string
+  companyLogo: string | null; stage: string | null; amountUsd: number | null; raisedAt: string | null
+  category: string | null; city: string | null; founderUrl: string | null; personSourceUrl: string | null
+  linkedinUrl: string | null; xHandle: string | null
+}
+export interface FounderContact {
+  name: string; title: string | null; role: string | null; email: string | null; emailStatus: string; linkedin: string | null; source: string | null
+}
+export interface SavedFounderLead { founder: FundedFounder; contacts: FounderContact[]; savedAt: string }
 export interface ArenaChallenge { code: string; challengeId: string; createdAt: string; friendScore?: number }
 export interface DemoState {
   activeRoleId: string; completedModuleIds: string[]; attempts: Attempt[]
   xp: number; streak: number; arenaChallenges: ArenaChallenge[]
-  applications: Application[]; profile: ResumeProfile
+  applications: Application[]; founderLeads: SavedFounderLead[]; profile: ResumeProfile
 }

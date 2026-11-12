@@ -1,7 +1,7 @@
 export type LearningResource = { id: string; title: string; description: string; url: string; source: string; type: 'Video'|'Course'|'Article'|'Documentation'|'Practice'; level: 'Beginner'|'Intermediate'|'Advanced'; estimatedTime: string|null; language: string|null; freeAccess: string; reason: string; thumbnail?: string|null; publishedAt?: string|null }
 export type Roadmap = { id: string; title: string; query: string; difficulty?: string; estimatedTotalDuration?: string; created_at?: string; updated_at?: string; topics: { id: string; title: string; explanation: string; objective: string; difficulty: string; estimatedTime: string|null; prerequisites: string[]; resourceIds: string[]; practiceSuggestions: string[]; miniProject: string; completed: boolean }[] }
 
-const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '')
+const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api').replace(/\/$/, '')
 const accessTokenKey = 'bhumika_access_token'
 const refreshTokenKey = 'bhumika_refresh_token'
 type Session = { access_token: string; refresh_token: string }
@@ -37,13 +37,13 @@ async function requestWithRefresh<T>(path: string, init: RequestInit, retried: b
   if (token) headers.set('authorization', `Bearer ${token}`)
   let response: Response
   try { response = await fetch(`${base}${path}`, { ...init, headers }) }
-  catch { throw new Error('The learning service is unreachable. Check your connection and try again.') }
+  catch { throw new Error('The Bhūmikā API is unreachable. Restart the app with “npm run dev” so the frontend and backend run together, then try again.') }
   const body = response.status === 204 ? null : await response.json().catch(() => null)
   const canRefresh = path !== '/auth/login' && path !== '/auth/register' && path !== '/auth/refresh'
   if (response.status === 401 && !retried && canRefresh && localStorage.getItem(refreshTokenKey)) {
     let refreshed: string | null
     try { refreshed = await refreshAccessToken() }
-    catch { throw new Error('The learning service is unreachable. Your session is still saved; try again shortly.') }
+    catch { throw new Error('The Bhūmikā API is unreachable. Your session is still saved; restart the app with “npm run dev” so the frontend and backend run together, then try again.') }
     if (refreshed) return requestWithRefresh<T>(path, init, true)
   }
   if (!response.ok) throw new Error(body?.error?.message || `Request failed (${response.status}).`)

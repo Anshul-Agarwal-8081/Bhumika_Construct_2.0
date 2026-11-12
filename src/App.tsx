@@ -13,9 +13,10 @@ import { loadState, resetState, saveState } from './services/storage'
 import { learningRequest, learningSignIn, learningSignOut, learningRegister, learningCurrentUser, learningClearSession, learningForgotPassword, learningUpdatePassword, type LearningResource, type Roadmap } from './services/learningApi'
 import { filterLearningResources } from './services/learningFilters'
 import { readResumePdf } from './services/resumePdf'
-import type { Application, ApplicationStatus, Attempt, Challenge, DemoState, Evaluation, Opportunity, Resource, Role, RoadmapModule } from './types'
+import { fetchFounderContacts, searchFundedFounders, type FounderSearchResult } from './services/foundersApi'
+import type { Application, ApplicationStatus, Attempt, Challenge, DemoState, Evaluation, FounderContact, FundedFounder, Opportunity, Resource, Role, RoadmapModule, SavedFounderLead } from './types'
 
-type View = 'dashboard' | 'explore' | 'role' | 'learn' | 'lesson' | 'practice' | 'results' | 'arena' | 'opportunities' | 'opportunity' | 'resume' | 'applications'
+type View = 'dashboard' | 'explore' | 'role' | 'learn' | 'lesson' | 'practice' | 'results' | 'arena' | 'opportunities' | 'opportunity' | 'resume' | 'applications' | 'founders'
 
 const nav = [
   { id: 'dashboard' as View, label: 'Dashboard', icon: House },
@@ -25,6 +26,7 @@ const nav = [
   { id: 'opportunities' as View, label: 'Opportunities', icon: BriefcaseBusiness },
   { id: 'resume' as View, label: 'Resume Studio', icon: FileText },
   { id: 'applications' as View, label: 'Applications', icon: ListChecks },
+  { id: 'founders' as View, label: 'Founder Finder', icon: Users },
 ]
 
 const initials = 'DL'
@@ -158,6 +160,7 @@ function App() {
             if (status === 'Applied' && !window.confirm('Confirm you have submitted this application? Bhūmikā will not send it for you.')) return
             update({ applications: state.applications.map((app) => app.id === id ? { ...app, status, updatedAt: new Date().toISOString() } : app) })
           }} onPrepare={() => go('resume')} />}
+          {view === 'founders' && <FounderFinder leads={state.founderLeads} onLeadsChange={(founderLeads) => update({ founderLeads })} />}
         </div>
         <footer className="app-footer"><span>Bhūmikā · Your next step, made clear.</span><span><LockKeyhole size={12} /> Your demo progress stays on this device</span></footer>
       </main>
@@ -471,6 +474,79 @@ function OpportunityDetail({ item, onBack, onPrepare }: { item: Opportunity; onB
   return <>
     <button className="back-link" onClick={onBack}><ArrowLeft size={15} /> All opportunities</button>
     <div className="opportunity-detail-layout"><article className="opportunity-detail-main"><div className="opportunity-company-row"><span className="company-mark">{item.company.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span><strong>{item.company}</strong><small>{item.location}</small></span><Pill tone="amber">Example listing</Pill></div><h1>{item.title}</h1><div className="opportunity-detail-meta"><Pill>{item.type}</Pill><span><Clock3 size={13} /> {item.posted}</span><span><MapPinIcon /> {item.location}</span></div><h2>About this opportunity</h2><p>{item.description}</p><h2>What they're looking for</h2><ul className="requirements-list">{item.requirements.map((requirement) => <li key={requirement}><CheckCircle2 size={15} /> {requirement}</li>)}</ul><div className="detail-source-note"><ExternalLink size={14} /><span>This is a demo listing. It is not a verified open position.</span><a href={item.url} target="_blank" rel="noreferrer">Example link</a></div></article><aside className="match-card card"><span className="match-card-icon"><Sparkles size={18} /></span><div className="eyebrow">WHY IT MAY FIT</div><h3>A starting point for your next application.</h3><p>This listing shares skills with the <strong>{role?.title ?? 'selected role'}</strong> learning path.</p><div className="match-skill-list">{item.skills.map((id) => <span key={id}><CheckCircle2 size={14} /> {skills.find((skill) => skill.id === id)?.name}</span>)}</div><div className="match-disclaimer">Your match is based on role-path skills, not a hiring prediction.</div><Button onClick={onPrepare}>Prepare an application <ArrowRight size={14} /></Button></aside></div>
+  </>
+}
+
+function FounderFinder({ leads, onLeadsChange }: { leads: SavedFounderLead[]; onLeadsChange: (leads: SavedFounderLead[]) => void }) {
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('')
+  const [results, setResults] = useState<FounderSearchResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [contactState, setContactState] = useState<Record<string, { loading?: boolean; error?: string; contacts?: FounderContact[] }>>({})
+
+  async function search(event: React.FormEvent) {
+    event.preventDefault()
+    setLoading(true); setError(''); setResults(null)
+    try { setResults(await searchFundedFounders(query, category)) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load startup leads.') }
+    finally { setLoading(false) }
+  }
+
+  async function findContacts(founder: FundedFounder) {
+    if (!window.confirm('Look up confirmed work emails for this startup? The provider includes 3 free contact lookups total; after that it may use prepaid credits ($1 per company). No email will be sent.')) return
+    setContactState((current) => ({ ...current, [founder.companySlug]: { loading: true } }))
+    try {
+      const contacts = await fetchFounderContacts(founder.companySlug)
+      setContactState((current) => ({ ...current, [founder.companySlug]: { contacts } }))
+      const saved = leads.some((lead) => lead.founder.companySlug === founder.companySlug)
+      if (saved) onLeadsChange(leads.map((lead) => lead.founder.companySlug === founder.companySlug ? { ...lead, contacts } : lead))
+    } catch (cause) {
+      setContactState((current) => ({ ...current, [founder.companySlug]: { error: cause instanceof Error ? cause.message : 'Email lookup failed.' } }))
+    }
+  }
+
+  function saveLead(founder: FundedFounder) {
+    const existing = leads.find((lead) => lead.founder.founderId === founder.founderId)
+    if (existing) {
+      onLeadsChange(leads.filter((lead) => lead.founder.founderId !== founder.founderId))
+      return
+    }
+    const contacts = contactState[founder.companySlug]?.contacts ?? []
+    onLeadsChange([{ founder, contacts, savedAt: new Date().toISOString() }, ...leads])
+  }
+
+  function formatRaise(amount: number | null) {
+    return amount === null ? 'Amount undisclosed' : `US$${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(amount)} raised`
+  }
+
+  return <>
+    <PageHeading eyebrow="RECENTLY FUNDED · INDIA" title="Founder Finder" description="Find founders at Indian startups whose latest funding round was announced in the past six months." action={<Pill tone="teal"><Users size={12} /> PUBLIC BUSINESS CONTACTS</Pill>} />
+    <div className="founder-finder-note"><LockKeyhole size={15} /><span>Funding and founder details come from Recent Funding. Search requests include the name or organization configured on the backend. Email lookups return confirmed work contacts only; no messages are sent.</span></div>
+    <form className="founder-search card" onSubmit={(event) => void search(event)}>
+      <label>Company, founder, or keyword<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. fintech, Bengaluru, founder name" /></label>
+      <label>Category slug <input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="e.g. fintech, ai-agents" /></label>
+      <Button type="submit" disabled={loading}>{loading ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />}{loading ? 'Searching…' : 'Find founders'}</Button>
+    </form>
+    {error && <div className="founder-error" role="alert"><CircleHelp size={16} /><span>{error}</span></div>}
+    {results && <><div className="founder-results-heading"><div><strong>{results.count} founder {results.count === 1 ? 'match' : 'matches'}</strong><span>India · last 183 days</span></div><small>{results.dataFreshness}</small></div>
+      <div className="founder-results">{results.founders.map((founder) => {
+        const contact = contactState[founder.companySlug]
+        const saved = leads.some((lead) => lead.founder.founderId === founder.founderId)
+        return <article className="founder-result card" key={founder.founderId}>
+          <div className="founder-company-mark">{founder.companyLogo ? <img src={founder.companyLogo} alt="" /> : founder.companyName.slice(0, 1).toUpperCase()}</div>
+          <div className="founder-result-main"><div className="founder-result-title"><div><h3>{founder.founderName}</h3><span>{founder.role} · {founder.companyName}</span></div><Pill tone="teal">{founder.stage ?? 'Funded'}</Pill></div>
+            <p>{[founder.category, founder.city].filter(Boolean).join(' · ') || 'Indian startup'} <span>·</span> {formatRaise(founder.amountUsd)}{founder.raisedAt ? ` · ${new Date(founder.raisedAt).toLocaleDateString()}` : ''}</p>
+            <div className="founder-card-links"><a href={`https://recentfunding.com/companies/${encodeURIComponent(founder.companySlug)}/`} target="_blank" rel="noreferrer">Company & funding sources <ExternalLink size={12} /></a>{founder.founderUrl && <a href={founder.founderUrl} target="_blank" rel="noreferrer">Founder profile <ExternalLink size={12} /></a>}{founder.personSourceUrl && <a href={founder.personSourceUrl} target="_blank" rel="noreferrer">Founder source <ExternalLink size={12} /></a>}{founder.linkedinUrl && <a href={founder.linkedinUrl} target="_blank" rel="noreferrer">LinkedIn <ExternalLink size={12} /></a>}</div>
+            {contact && <div className="founder-contact-area">{contact.loading ? <span><LoaderCircle size={14} className="spin" /> Looking up founder work contacts…</span> : contact.error ? <span className="founder-contact-error">{contact.error}</span> : contact.contacts?.length ? contact.contacts.map((person) => <div className="founder-contact" key={`${person.name}-${person.email ?? 'none'}`}><strong>{person.name}</strong>{(person.title || person.role) && <small>{person.title || person.role}</small>}{person.email ? <a href={`mailto:${person.email}`}>{person.email}</a> : <small>Email not available</small>}{person.source && <a href={person.source} target="_blank" rel="noreferrer">Source</a>}</div>) : <span>No confirmed founder or CEO work email was found for this company.</span>}</div>}
+            <div className="founder-card-actions"><Button variant="secondary" onClick={() => void findContacts(founder)} disabled={Boolean(contact?.loading)}><Send size={14} /> Find verified email</Button><Button variant="secondary" onClick={() => saveLead(founder)}>{saved ? <Check size={14} /> : <Plus size={14} />}{saved ? 'Saved lead' : 'Save lead'}</Button></div>
+          </div>
+        </article>
+      })}{results.founders.length === 0 && <EmptyState title="No founder matches" body="Try a broader keyword or clear the category filter." />}</div>
+    </>}
+    <section className="founder-saved-section"><div className="section-heading"><div><h2>Saved leads</h2><p>Kept in this browser for your follow-up list.</p></div><Pill>{leads.length} saved</Pill></div>
+      {leads.length ? <div className="founder-saved-list">{leads.map((lead) => <article className="founder-saved-row card" key={lead.founder.founderId}><div><strong>{lead.founder.founderName}</strong><span>{lead.founder.companyName} · {lead.founder.role}</span>{lead.contacts.filter((contact) => contact.email).map((contact) => <a key={contact.email} href={`mailto:${contact.email}`}>{contact.email}</a>)}</div><button className="quiet-link" onClick={() => onLeadsChange(leads.filter((item) => item.founder.founderId !== lead.founder.founderId))}>Remove</button></article>)}</div> : <p className="founder-no-saved">Save a founder from your search results to keep the lead here.</p>}
+    </section>
   </>
 }
 

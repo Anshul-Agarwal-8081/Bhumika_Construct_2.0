@@ -13,6 +13,25 @@
 .resume-import-status { color: var(--text-muted, #64736f); font-size: 12px; line-height: 1.5; }
 .resume-import-status { color: var(--teal, #138574); }
 
+.founder-finder-note,.founder-error { display:flex; align-items:flex-start; gap:10px; margin:0 0 18px; padding:12px 14px; border-radius:10px; background:var(--surface-sunken,#f5f8f6); color:var(--ink-muted,#66736e); font-size:12px; line-height:1.55; }
+.founder-finder-note svg { flex:none; color:var(--teal,#138574); margin-top:1px; }
+.founder-search { display:grid; grid-template-columns:1.3fr 1fr auto; align-items:end; gap:14px; margin-bottom:20px; padding:18px; }
+.founder-search label { display:grid; gap:7px; color:var(--ink-muted,#66736e); font-size:11px; font-weight:600; }
+.founder-search input { width:100%; min-height:42px; padding:10px 12px; border:1px solid var(--border-default,#dce5e1); border-radius:8px; color:var(--ink,#19342d); background:white; font:inherit; font-size:13px; }
+.founder-search input:focus { outline:2px solid color-mix(in srgb,var(--teal,#138574) 26%,transparent); border-color:var(--teal,#138574); }
+.founder-results-heading { display:flex; justify-content:space-between; align-items:end; gap:16px; margin:24px 0 12px; }
+.founder-results-heading > div { display:grid; gap:4px; }.founder-results-heading strong { color:var(--ink,#19342d); font-size:15px; }.founder-results-heading span,.founder-results-heading small { color:var(--ink-muted,#66736e); font-size:11px; }.founder-results-heading small { max-width:420px; text-align:right; }
+.founder-error { color:#9a3b36; background:#fff5f3; }
+.founder-results { display:grid; gap:12px; }
+.founder-result { display:grid; grid-template-columns:44px minmax(0,1fr); gap:14px; padding:17px; }
+.founder-company-mark { display:grid; place-items:center; width:42px; height:42px; overflow:hidden; border-radius:11px; background:var(--surface-sunken,#f1f5f3); color:var(--teal,#138574); font-weight:700; }.founder-company-mark img { width:100%; height:100%; object-fit:cover; }
+.founder-result-main { min-width:0; }.founder-result-title { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }.founder-result-title h3 { margin:0 0 4px; color:var(--ink,#19342d); font-size:15px; }.founder-result-title span,.founder-result-main > p { color:var(--ink-muted,#66736e); font-size:12px; }.founder-result-main > p { margin:12px 0; line-height:1.5; }.founder-result-main > p span { padding:0 4px; color:var(--border-strong,#9aaba4); }
+.founder-card-links { display:flex; flex-wrap:wrap; gap:8px 16px; margin:10px 0 13px; }.founder-card-links a,.founder-contact a,.founder-saved-row a { display:inline-flex; align-items:center; gap:5px; color:var(--teal,#138574); font-size:11px; text-decoration:none; }.founder-card-links a:hover,.founder-contact a:hover,.founder-saved-row a:hover { text-decoration:underline; }
+.founder-card-actions { display:flex; flex-wrap:wrap; gap:8px; }.founder-card-actions .btn { min-height:34px; padding:7px 11px; font-size:11px; }
+.founder-contact-area { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; padding:12px; border-radius:9px; background:var(--surface-sunken,#f5f8f6); color:var(--ink-muted,#66736e); font-size:11px; }.founder-contact-area > span { display:inline-flex; align-items:center; gap:7px; }.founder-contact-error { color:#9a3b36; }.founder-contact { display:grid; gap:4px; min-width:180px; padding:8px 10px; border:1px solid var(--border-default,#dce5e1); border-radius:8px; background:white; }.founder-contact strong { color:var(--ink,#19342d); font-size:12px; }.founder-contact small { color:var(--ink-muted,#66736e); font-size:10px; }
+.founder-saved-section { margin-top:34px; }.founder-saved-section .section-heading { margin-bottom:12px; }.founder-saved-list { display:grid; gap:8px; }.founder-saved-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; }.founder-saved-row > div { display:grid; gap:4px; }.founder-saved-row strong { color:var(--ink,#19342d); font-size:13px; }.founder-saved-row span,.founder-no-saved { color:var(--ink-muted,#66736e); font-size:11px; }.founder-no-saved { padding:14px; border:1px dashed var(--border-default,#dce5e1); border-radius:9px; }
+@media(max-width:760px) { .founder-search { grid-template-columns:1fr; }.founder-search > .btn { width:100%; justify-content:center; }.founder-results-heading { align-items:flex-start; flex-direction:column; }.founder-results-heading small { text-align:left; }.founder-result { grid-template-columns:34px minmax(0,1fr); gap:10px; padding:13px; }.founder-company-mark { width:34px; height:34px; }.founder-result-title { flex-direction:column; }.founder-saved-row { align-items:flex-start; } }
+
 /* ==========================================================================
    Bhūmikā — Visual Design System & Application Styles
    "Learn a role. Prove your skills. Prepare your next application."

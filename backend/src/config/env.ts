@@ -7,10 +7,10 @@ const backendEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../.
 dotenv.config({ path: backendEnvPath })
 
 const schema = z.object({
-  PORT: z.coerce.number().int().min(1).max(65535).default(5000),
+  PORT: z.coerce.number().int().min(1).max(65535).default(5001),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   FRONTEND_ORIGIN: z.string().url().default('http://localhost:5173'),
-  BACKEND_URL: z.string().url().default('http://localhost:5000'),
+  BACKEND_URL: z.string().url().default('http://localhost:5001'),
   SUPABASE_URL: z.string().url().optional().or(z.literal('')),
   SUPABASE_ANON_KEY: z.string().optional().or(z.literal('')),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional().or(z.literal('')),
@@ -22,6 +22,8 @@ const schema = z.object({
   GEMINI_FALLBACK_MODEL: z.string().optional().or(z.literal('')),
   TAVILY_API_KEY: z.string().optional().or(z.literal('')),
   YOUTUBE_API_KEY: z.string().optional().or(z.literal('')),
+  RECENT_FUNDING_API_KEY: z.string().optional().or(z.literal('')),
+  RECENT_FUNDING_ON_BEHALF_OF: z.string().trim().max(160).optional().or(z.literal('')),
   ADZUNA_APP_ID: z.string().optional().or(z.literal('')),
   ADZUNA_APP_KEY: z.string().optional().or(z.literal('')),
   ONET_API_USERNAME: z.string().optional().or(z.literal('')),

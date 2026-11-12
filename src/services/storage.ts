@@ -1,4 +1,4 @@
-import type { Application, ApplicationStatus, ArenaChallenge, Attempt, DemoState } from '../types'
+import type { Application, ApplicationStatus, ArenaChallenge, Attempt, DemoState, SavedFounderLead } from '../types'
 
 const STORAGE_KEY = 'bhumika-demo-state-v1'
 const applicationStatuses: ApplicationStatus[] = ['Draft', 'Ready for review', 'Applied', 'Interview', 'Rejected / Closed']
@@ -26,6 +26,13 @@ function isArenaChallenge(value: unknown): value is ArenaChallenge {
     && typeof value.createdAt === 'string' && (value.friendScore === undefined || typeof value.friendScore === 'number')
 }
 
+function isSavedFounderLead(value: unknown): value is SavedFounderLead {
+  if (!isRecord(value) || !isRecord(value.founder) || !Array.isArray(value.contacts) || typeof value.savedAt !== 'string') return false
+  const founder = value.founder
+  return typeof founder.founderId === 'string' && typeof founder.founderName === 'string'
+    && typeof founder.companySlug === 'string' && typeof founder.companyName === 'string'
+}
+
 function textField(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
@@ -36,7 +43,7 @@ function countField(value: unknown, fallback: number): number {
 
 export const initialState: DemoState = {
   activeRoleId: 'frontend', completedModuleIds: [], attempts: [], xp: 0, streak: 0,
-  arenaChallenges: [], applications: [],
+  arenaChallenges: [], applications: [], founderLeads: [],
   profile: { name: '', email: '', education: '', skills: '', projects: '', experience: '', links: '' },
 }
 
@@ -55,6 +62,7 @@ export function loadState(): DemoState {
       streak: countField(parsed.streak, initialState.streak),
       arenaChallenges: Array.isArray(parsed.arenaChallenges) ? parsed.arenaChallenges.filter(isArenaChallenge) : [],
       applications: Array.isArray(parsed.applications) ? parsed.applications.filter(isApplication) : [],
+      founderLeads: Array.isArray(parsed.founderLeads) ? parsed.founderLeads.filter(isSavedFounderLead) : [],
       profile: {
         name: textField(profile.name, initialState.profile.name),
         email: textField(profile.email, initialState.profile.email),
