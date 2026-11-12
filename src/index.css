@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+.resume-import {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px dashed var(--border, #dce7e4);
+  border-radius: 10px;
+  background: var(--surface-muted, #f7faf9);
+}
+.resume-import > span,
+.resume-import-status { color: var(--text-muted, #64736f); font-size: 12px; line-height: 1.5; }
+.resume-import-status { color: var(--teal, #138574); }
+
 /* ==========================================================================
    Bhūmikā — Visual Design System & Application Styles
    "Learn a role. Prove your skills. Prepare your next application."
